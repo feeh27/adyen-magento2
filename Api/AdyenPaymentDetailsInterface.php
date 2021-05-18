@@ -15,7 +15,7 @@
  *
  * Adyen Payment Module
  *
- * Copyright (c) 2017 Adyen B.V.
+ * Copyright (c) 2019 Adyen B.V.
  * This file is open source and available under the MIT license.
  * See the LICENSE file for more info.
  *
@@ -24,11 +24,11 @@
 
 namespace Adyen\Payment\Api;
 
-interface AdyenRequestMerchantSessionInterface
+interface AdyenPaymentDetailsInterface
 {
-
     /**
-     * @return mixed
+     * @param string $payload
+     * @return string
      */
-    public function getMerchantSession();
+    public function initiate($payload);
 }

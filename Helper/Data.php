@@ -25,7 +25,6 @@ namespace Adyen\Payment\Helper;
 
 use Magento\Framework\App\Helper\AbstractHelper;
 use Magento\Framework\App\Cache\Type\Config as ConfigCache;
-use Adyen\Payment\Model\ApplicationInfo;
 
 /**
  * @SuppressWarnings(PHPMD.LongVariable)
@@ -383,65 +382,6 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Street format
-     *
-     * @param type $address
-     * @return array
-     */
-    public function getStreet($address)
-    {
-        if (empty($address)) {
-            return false;
-        }
-
-        $street = $this->formatStreet($address->getStreet());
-        $streetName = $street['0'];
-        unset($street['0']);
-        $streetNr = implode(' ', $street);
-        return (['name' => trim($streetName), 'house_number' => $streetNr]);
-    }
-
-    /**
-     * Street format
-     *
-     * @param string $streetLine
-     * @return array
-     */
-    public function getStreetFromString($streetLine)
-    {
-        $street = $this->formatStreet([$streetLine]);
-        $streetName = $street['0'];
-        unset($street['0']);
-        $streetNr = implode(' ', $street);
-        return (['name' => trim($streetName), 'house_number' => $streetNr]);
-    }
-
-    /**
-     * Fix this one string street + number
-     *
-     * @param array $street
-     * @return array $street
-     * @example street + number
-     */
-    public function formatStreet($street)
-    {
-        if (count($street) != 1) {
-            return $street;
-        }
-
-        $street['0'] = trim($street['0']);
-
-        preg_match('/((\s\d{0,10})|(\s\d{0,10}\w{1,3}))$/i', $street['0'], $houseNumber, PREG_OFFSET_CAPTURE);
-        if (!empty($houseNumber['0'])) {
-            $_houseNumber = trim($houseNumber['0']['0']);
-            $position = $houseNumber['0']['1'];
-            $streetName = trim(substr($street['0'], 0, $position));
-            $street = [$streetName, $_houseNumber];
-        }
-        return $street;
-    }
-
-    /**
      * gives back global configuration values
      *
      * @param $field
@@ -630,108 +570,31 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Gives back adyen_apple_pay configuration values
-     *
-     * @param $field
-     * @param null|int|string $storeId
-     * @return mixed
-     */
-    public function getAdyenApplePayConfigData($field, $storeId = null)
-    {
-        return $this->getConfigData($field, 'adyen_apple_pay', $storeId);
-    }
-
-    /**
-     * @param null|int|string $storeId
-     * @return mixed
-     */
-    public function getAdyenApplePayMerchantIdentifier($storeId = null)
-    {
-        $demoMode = $this->getAdyenAbstractConfigDataFlag('demo_mode');
-        if ($demoMode) {
-            return $this->getAdyenApplePayConfigData('merchant_identifier_test', $storeId);
-        } else {
-            return $this->getAdyenApplePayConfigData('merchant_identifier_live', $storeId);
-        }
-    }
-
-    /**
-     * @param null|int|string $storeId
-     * @return mixed
-     */
-    public function getAdyenApplePayPemFileLocation($storeId = null)
-    {
-        $demoMode = $this->getAdyenAbstractConfigDataFlag('demo_mode');
-        if ($demoMode) {
-            return $this->getAdyenApplePayConfigData('full_path_location_pem_file_test', $storeId);
-        } else {
-            return $this->getAdyenApplePayConfigData('full_path_location_pem_file_live', $storeId);
-        }
-    }
-
-    /**
-     * Gives back adyen_google_pay configuration values
-     *
-     * @param $field
-     * @param null|int|string $storeId
-     * @return mixed
-     */
-    public function getAdyenGooglePayConfigData($field, $storeId = null)
-    {
-        return $this->getConfigData($field, 'adyen_google_pay', $storeId);
-    }
-
-    /**
-     * Gives back adyen_google_pay configuration values
-     *
-     * @param $field
-     * @param null|int|string $storeId
-     * @return mixed
-     */
-    public function isAdyenGooglePayEnabled($storeId = null)
-    {
-        return $this->getAdyenGooglePayConfigData('active', $storeId);
-    }
-
-    /**
-     * @param string $storeId
-     * @return mixed
-     */
-    public function getAdyenGooglePayMerchantIdentifier($storeId = null)
-    {
-        $value = $this->getAdyenGooglePayConfigData('merchant_identifier', $storeId);
-        if($value === null) {
-            return '';
-        }
-        return $value;
-    }
-
-    /**
      * Retrieve decrypted hmac key
      *
      * @return string
      */
-    public function getHmac()
+    public function getHmac($storeId = null)
     {
-        switch ($this->isDemoMode()) {
+        switch ($this->isDemoMode($storeId)) {
             case true:
-                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenHppConfigData('hmac_test')));
+                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenHppConfigData('hmac_test', $storeId)));
                 break;
             default:
-                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenHppConfigData('hmac_live')));
+                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenHppConfigData('hmac_live', $storeId)));
                 break;
         }
         return $secretWord;
     }
 
-    public function getHmacPayByMail()
+    public function getHmacPayByMail($storeId = null)
     {
-        switch ($this->isDemoMode()) {
+        switch ($this->isDemoMode($storeId)) {
             case true:
-                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenPayByMailConfigData('hmac_test')));
+                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenPayByMailConfigData('hmac_test', $storeId)));
                 break;
             default:
-                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenPayByMailConfigData('hmac_live')));
+                $secretWord = $this->_encryptor->decrypt(trim($this->getAdyenPayByMailConfigData('hmac_live', $storeId)));
                 break;
         }
         return $secretWord;
@@ -786,6 +649,22 @@ class Data extends AbstractHelper
             );
         }
         return $apiKey;
+    }
+
+    /**
+     * Retrieve the Client key
+     *
+     * @param null|int|string $storeId
+     * @return string
+     */
+    public function getClientKey($storeId = null)
+    {
+        return trim(
+            $this->getAdyenAbstractConfigData(
+                $this->isDemoMode($storeId) ? 'client_key_test' : 'client_key_live',
+                $storeId
+            )
+        );
     }
 
     /**
@@ -957,7 +836,7 @@ class Data extends AbstractHelper
      * @param $recurringType
      * @return array
      */
-    public function getOneClickPaymentMethods($customerId, $storeId, $grandTotal, $recurringType)
+    public function getOneClickPaymentMethods($customerId, $storeId, $grandTotal)
     {
         $billingAgreements = [];
 
@@ -979,7 +858,7 @@ class Data extends AbstractHelper
 
             // check if contractType is supporting the selected contractType for OneClick payments
             $allowedContractTypes = $agreementData['contractTypes'];
-            if (in_array($recurringType, $allowedContractTypes)) {
+            if (in_array(\Adyen\Payment\Model\RecurringType::ONECLICK , $allowedContractTypes)) {
                 // check if AgreementLabel is set and if contract has an recurringType
                 if ($billingAgreement->getAgreementLabel()) {
                     // for Ideal use sepadirectdebit because it is
@@ -1053,11 +932,6 @@ class Data extends AbstractHelper
         return !$this->getAdyenOneclickConfigDataFlag('share_billing_agreement', $storeId);
     }
 
-    public function isGuestTokenizationEnabled($storeId)
-    {
-        return $this->getAdyenOneclickConfigDataFlag('guest_checkout_tokenization', $storeId);
-    }
-
     /**
      * @param $paymentMethod
      * @return bool
@@ -1070,7 +944,8 @@ class Data extends AbstractHelper
             strpos($paymentMethod, 'facilypay_') !== false ||
             strpos($paymentMethod, 'affirm') !== false ||
             strpos($paymentMethod, 'clearpay') !== false ||
-            strpos($paymentMethod, 'zip') !== false
+            strpos($paymentMethod, 'zip') !== false ||
+            strpos($paymentMethod, 'paybright') !== false
         ) {
             return true;
         }
@@ -1198,6 +1073,12 @@ class Data extends AbstractHelper
         return $this->scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
     }
 
+    public function getCustomerStreetLinesEnabled($storeId)
+    {
+        $path = 'customer/address/street_lines';
+        return $this->scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
+    }
+
     /**
      * Format Magento locale codes with undersocre to ISO locale codes with dash
      *
@@ -1206,28 +1087,6 @@ class Data extends AbstractHelper
     public function formatLocaleCode($localeCode)
     {
         return str_replace("_", "-", $localeCode);
-    }
-
-    public function getApplePayShippingTypes()
-    {
-        return [
-            [
-                'value' => 'shipping',
-                'label' => __('Shipping Method')
-            ],
-            [
-                'value' => 'delivery',
-                'label' => __('Delivery Method')
-            ],
-            [
-                'value' => 'storePickup',
-                'label' => __('Store Pickup Method')
-            ],
-            [
-                'value' => 'servicePickup',
-                'label' => __('Service Pickup Method')
-            ]
-        ];
     }
 
     public function getUnprocessedNotifications()
@@ -1584,6 +1443,7 @@ class Data extends AbstractHelper
      *
      * @return string
      * @throws \Adyen\AdyenException
+     * @deprecared please use getClientKey instead
      */
     public function getOriginKeyForBaseUrl()
     {
@@ -1717,7 +1577,7 @@ class Data extends AbstractHelper
                         $billingAgreement->getAgreementId(),
                         $order->getId()
                     )) {
-                        // save into sales_billing_agreement_order
+                        // save into billing_agreement_order
                         $billingAgreement->addOrderRelation($order);
                     }
                     // add to order to save agreement
@@ -1737,6 +1597,7 @@ class Data extends AbstractHelper
             $comment = $order->addStatusHistoryComment($message);
 
             $order->addRelatedObject($comment);
+            $order->save();
         }
     }
 
@@ -1759,15 +1620,15 @@ class Data extends AbstractHelper
      */
     public function getRecurringTypeFromOneclickRecurringSetting($storeId = null)
     {
-        $enableOneclick = $this->getAdyenAbstractConfigData('enable_oneclick', $storeId);
-        $enableRecurring = $this->getAdyenAbstractConfigData('enable_recurring', $storeId);
+        $enableOneclick = $this->getAdyenAbstractConfigDataFlag('enable_oneclick', $storeId);
+        $adyenCCVaultActive = $this->getAdyenCcVaultConfigDataFlag('active', $storeId);
 
-        if ($enableOneclick && $enableRecurring) {
+        if ($enableOneclick && $adyenCCVaultActive) {
             return \Adyen\Payment\Model\RecurringType::ONECLICK_RECURRING;
-        } elseif ($enableOneclick && !$enableRecurring) {
+        } elseif ($enableOneclick && !$adyenCCVaultActive) {
             return \Adyen\Payment\Model\RecurringType::ONECLICK;
-        } elseif (!$enableOneclick && $enableRecurring) {
-            return \Adyen\Payment\Model\RecurringType::RECURRING;
+        } elseif (!$enableOneclick && $adyenCCVaultActive) {
+            return \Adyen\Payment\Model\RecurringType::ONECLICK_RECURRING;
         } else {
             return \Adyen\Payment\Model\RecurringType::NONE;
         }
@@ -1811,19 +1672,6 @@ class Data extends AbstractHelper
     public function isHppVaultEnabled($storeId = null)
     {
         return $this->getAdyenHppVaultConfigDataFlag('active', $storeId);
-    }
-
-    /**
-     * Checks if the house number needs to be sent to the Adyen API separately or as it is in the street field
-     *
-     * @param $country
-     * @return bool
-     */
-    public function isSeparateHouseNumberRequired($country)
-    {
-        $countryList = ["nl", "de", "se", "no", "at", "fi", "dk"];
-
-        return in_array(strtolower($country), $countryList);
     }
 
     /**

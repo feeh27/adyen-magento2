@@ -13,64 +13,55 @@
  *                               #############
  *                               ############
  *
- * Adyen Payment Module
+ * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2017 Adyen B.V.
- * This file is open source and available under the MIT license.
- * See the LICENSE file for more info.
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
+ * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
  */
-
 
 namespace Adyen\Payment\Gateway\Request;
 
 use Magento\Payment\Gateway\Request\BuilderInterface;
 
-class ApplePayAuthorizationDataBuilder implements BuilderInterface
+class RedirectDataBuilder implements BuilderInterface
 {
     /**
-     * @var \Adyen\Payment\Helper\Data
+     * @var \Magento\Framework\App\State
      */
-    private $_adyenHelper;
+    private $appState;
 
     /**
-     * @var \Adyen\Payment\Logger\AdyenLogger
+     * @var \Adyen\Payment\Helper\Requests
      */
-    private $_adyenLogger;
+    private $adyenRequestsHelper;
 
     /**
-     * CaptureDataBuilder constructor.
+     * RedirectDataBuilder constructor.
      *
-     * @param \Adyen\Payment\Helper\Data $adyenHelper
+     * @param \Magento\Framework\Model\Context $context
+     * @param \Adyen\Payment\Helper\Requests $adyenRequestsHelper
      */
     public function __construct(
-        \Adyen\Payment\Helper\Data $adyenHelper,
-        \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+        \Magento\Framework\Model\Context $context,
+        \Adyen\Payment\Helper\Requests $adyenRequestsHelper
     ) {
-        $this->_adyenHelper = $adyenHelper;
-        $this->_adyenLogger = $adyenLogger;
+        $this->appState = $context->getAppState();
+        $this->adyenRequestsHelper = $adyenRequestsHelper;
     }
 
+    /**
+     * @param array $buildSubject
+     * @return array
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
     public function build(array $buildSubject)
     {
-        $requestBody = [];
+        /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $payment = $paymentDataObject->getPayment();
-        $token = $payment->getAdditionalInformation('token');
-
-        $requestBody['paymentMethod']['type'] = 'applepay';
-
-        // get payment data
-        if ($token) {
-            $parsedToken = json_decode($token);
-            $requestBody['paymentMethod']['applepay.token'] = base64_encode(json_encode($parsedToken->token->paymentData));
-        } else {
-            $this->_adyenLogger->addAdyenDebug("PaymentToken is empty");
-        }
-
-        $request['body'] = $requestBody;
-
+        $request['body'] = $this->adyenRequestsHelper->buildRedirectData($payment, []);
         return $request;
     }
 }

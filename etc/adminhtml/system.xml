@@ -35,7 +35,6 @@
                 <include path="Adyen_Payment::system/adyen_required_settings.xml"/>
                 <include path="Adyen_Payment::system/adyen_advanced_order_processing.xml"/>
                 <include path="Adyen_Payment::system/adyen_advanced_notifications.xml"/>
-                <include path="Adyen_Payment::system/adyen_billing_agreements.xml"/>
                 <include path="Adyen_Payment::system/adyen_checkout_experience.xml"/>
                 <include path="Adyen_Payment::system/adyen_manual_review.xml"/>
                 <include path="Adyen_Payment::system/adyen_split_payment.xml"/>
@@ -46,8 +45,6 @@
                 <include path="Adyen_Payment::system/adyen_pos_cloud.xml"/>
                 <include path="Adyen_Payment::system/adyen_pay_by_mail.xml"/>
                 <include path="Adyen_Payment::system/adyen_boleto.xml"/>
-                <include path="Adyen_Payment::system/adyen_apple_pay.xml"/>
-                <include path="Adyen_Payment::system/adyen_google_pay.xml"/>
                 <include path="Adyen_Payment::system/adyen_pwa.xml"/>
             </group>
         </section>

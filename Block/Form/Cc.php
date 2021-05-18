@@ -79,9 +79,9 @@ class Cc extends \Magento\Payment\Block\Form\Cc
      * @return string
      * @throws \Adyen\AdyenException
      */
-    public function getCheckoutOriginKeys()
+    public function getClientKey()
     {
-        return $this->adyenHelper->getOriginKeyForBaseUrl();
+        return $this->adyenHelper->getClientKey();
     }
 
     /**
@@ -135,19 +135,6 @@ class Cc extends \Magento\Payment\Block\Form\Cc
         }
 
         return $types;
-    }
-
-    /**
-     * Allow checkbox for MOTO payments to be saved as RECURRING
-     *
-     * @return bool
-     */
-    public function allowRecurring()
-    {
-        if ($this->adyenHelper->getAdyenAbstractConfigData('enable_recurring', null)) {
-            return true;
-        }
-        return false;
     }
 
     /**

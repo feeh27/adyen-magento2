@@ -23,12 +23,14 @@
 
 namespace Adyen\Payment\Model;
 
+use Adyen\Payment\Helper\ChargedCurrency;
 use Adyen\Payment\Helper\Vault;
 use Adyen\Payment\Model\Ui\AdyenCcConfigProvider;
 use Adyen\Payment\Model\Ui\AdyenHppConfigProvider;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Encryption\EncryptorInterface;
 use Magento\Framework\Webapi\Exception;
+use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Framework\App\Area;
@@ -162,6 +164,21 @@ class Cron
     /**
      * @var
      */
+    protected $_currency;
+
+    /**
+     * @var
+     */
+    protected $orderAmount;
+
+    /**
+     * @var
+     */
+    protected $orderCurrency;
+
+    /**
+     * @var
+     */
     protected $_boletoOriginalAmount;
 
     /**
@@ -270,6 +287,11 @@ class Cron
     protected $encryptor;
 
     /**
+     * @var ChargedCurrency
+     */
+    private $chargedCurrency;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -300,6 +322,7 @@ class Cron
      * @param PaymentTokenFactoryInterface $paymentTokenFactory
      * @param PaymentTokenRepositoryInterface $paymentTokenRepository
      * @param EncryptorInterface $encryptor
+     * @param ChargedCurrency $chargedCurrency
      */
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
@@ -329,7 +352,8 @@ class Cron
         PaymentTokenManagement $paymentTokenManagement,
         PaymentTokenFactoryInterface $paymentTokenFactory,
         PaymentTokenRepositoryInterface $paymentTokenRepository,
-        EncryptorInterface $encryptor
+        EncryptorInterface $encryptor,
+        ChargedCurrency $chargedCurrency
     ) {
         $this->_scopeConfig = $scopeConfig;
         $this->_adyenLogger = $adyenLogger;
@@ -359,6 +383,7 @@ class Cron
         $this->paymentTokenFactory = $paymentTokenFactory;
         $this->paymentTokenRepository = $paymentTokenRepository;
         $this->encryptor = $encryptor;
+        $this->chargedCurrency = $chargedCurrency;
     }
 
     /**
@@ -390,8 +415,7 @@ class Cron
                 // OFFER_CLOSED notifications needs to be at least 10 minutes old to be processed
                 $offerClosedMinDate = new \DateTime('-10 minutes');
                 $createdAt = \DateTime::createFromFormat('Y-m-d H:i:s', $notification['created_at']);
-
-                $minutesUntilProcessing = $createdAt->diff($offerClosedMinDate)->i;
+                $minutesUntilProcessing = ($createdAt->format('U') - $offerClosedMinDate->format('U')) / 60;
 
                 if ($minutesUntilProcessing > 0) {
                     $this->_adyenLogger->addAdyenNotificationCronjob(
@@ -421,7 +445,7 @@ class Cron
                 $authorisationSuccessFalseMinDate = new \DateTime('-10 minutes');
                 $createdAt = \DateTime::createFromFormat('Y-m-d H:i:s', $notification['created_at']);
 
-                $minutesUntilProcessing = $createdAt->diff($authorisationSuccessFalseMinDate)->i;
+                $minutesUntilProcessing = ($createdAt->format('U') - $authorisationSuccessFalseMinDate->format('U')) / 60;
 
                 if ($minutesUntilProcessing > 0) {
                     $this->_adyenLogger->addAdyenNotificationCronjob(
@@ -671,6 +695,7 @@ class Cron
         $this->_paymentMethod = $notification->getPaymentMethod();
         $this->_reason = $notification->getReason();
         $this->_value = $notification->getAmountValue();
+        $this->_currency = $notification->getAmountCurrency();
         $this->_live = $notification->getLive();
 
         $additionalData = !empty($notification->getAdditionalData()) ? $this->serializer->unserialize(
@@ -728,6 +753,20 @@ class Cron
                 $this->ratepayDescriptor = $ratepayDescriptor;
             }
         }
+
+        $this->declareOrderVariables();
+    }
+
+    /**
+     * Declare private variables with order charged amount and currency
+     *
+     * @return void
+     */
+    private function declareOrderVariables()
+    {
+        $orderAmountCurrency = $this->chargedCurrency->getOrderAmountCurrency($this->_order, false);
+        $this->orderAmount = $orderAmountCurrency->getAmount();
+        $this->orderCurrency = $orderAmountCurrency->getCurrencyCode();
     }
 
     /**
@@ -757,17 +796,15 @@ class Cron
         $success = (!empty($this->_reason)) ? "$successResult <br />reason:$this->_reason" : $successResult;
 
         if ($this->_eventCode == Notification::REFUND || $this->_eventCode == Notification::CAPTURE) {
-            $currency = $this->_order->getOrderCurrencyCode();
-
             // check if it is a full or partial refund
             $amount = $this->_value;
-            $orderAmount = (int)$this->_adyenHelper->formatAmount($this->_order->getGrandTotal(), $currency);
+            $formattedOrderAmount = (int)$this->_adyenHelper->formatAmount($this->orderAmount, $this->orderCurrency);
 
             $this->_adyenLogger->addAdyenNotificationCronjob(
-                'amount notification:' . $amount . ' amount order:' . $orderAmount
+                'amount notification:' . $amount . ' amount order:' . $formattedOrderAmount
             );
 
-            if ($amount == $orderAmount) {
+            if ($amount == $formattedOrderAmount) {
                 $this->_order->setData(
                     'adyen_notification_event_code',
                     $this->_eventCode . " : " . strtoupper($successResult)
@@ -1362,7 +1399,8 @@ class Cron
                                 $paymentTokenAlternativePaymentMethod->setCustomerId($customerId)
                                     ->setGatewayToken($this->_pspReference)
                                     ->setPaymentMethodCode(AdyenCcConfigProvider::CODE)
-                                    ->setPublicHash($this->encryptor->getHash($customerId . $this->_pspReference));
+                                    ->setPublicHash($this->encryptor->getHash($customerId . $this->_pspReference))
+                                    ->setTokenDetails(json_encode($details));
                             } else {
                                 $this->_adyenLogger->addAdyenNotificationCronjob('Gateway token already exists');
                             }
@@ -1372,7 +1410,6 @@ class Cron
                             $expDate->add(new DateInterval('P10Y'));
                             $paymentTokenAlternativePaymentMethod->setExpiresAt($expDate->format('Y-m-d H:i:s'));
 
-                            $paymentTokenAlternativePaymentMethod->setTokenDetails(json_encode($details));
                             $this->paymentTokenRepository->save($paymentTokenAlternativePaymentMethod);
                             $this->_adyenLogger->addAdyenNotificationCronjob('New gateway token saved');
                         }
@@ -1417,9 +1454,8 @@ class Cron
                 ->getFirstItem();
 
             if ($orderPayment->getId() > 0) {
-                $currency = $this->_order->getOrderCurrencyCode();
-                $amountRefunded = $amountRefunded = $orderPayment->getTotalRefunded() +
-                    $this->_adyenHelper->originalAmount($this->_value, $currency);
+                $amountRefunded = $orderPayment->getTotalRefunded() +
+                    $this->_adyenHelper->originalAmount($this->_value, $this->_currency);
                 $orderPayment->setUpdatedAt(new \DateTime());
                 $orderPayment->setTotalRefunded($amountRefunded);
                 $orderPayment->save();
@@ -1440,8 +1476,7 @@ class Cron
             // refund is done through adyen backoffice so create a credit memo
             $order = $this->_order;
             if ($order->canCreditmemo()) {
-                $currency = $this->_order->getOrderCurrencyCode();
-                $amount = $this->_adyenHelper->originalAmount($this->_value, $currency);
+                $amount = $this->_adyenHelper->originalAmount($this->_value, $this->_currency);
                 $order->getPayment()->registerRefundNotification($amount);
 
                 $this->_adyenLogger->addAdyenNotificationCronjob('Created credit memo for order');
@@ -1615,8 +1650,7 @@ class Cron
         }
 
         // validate if amount is total amount
-        $orderCurrencyCode = $this->_order->getOrderCurrencyCode();
-        $amount = $this->_adyenHelper->originalAmount($this->_value, $orderCurrencyCode);
+        $amount = $this->_adyenHelper->originalAmount($this->_value, $this->_currency);
 
         try {
             // add to order payment
@@ -1640,7 +1674,7 @@ class Cron
             );
         }
 
-        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode)) {
+        if ($this->_isTotalAmount($paymentObj->getEntityId(), $this->orderCurrency)) {
             $this->_createInvoice();
         } else {
             $this->_adyenLogger->addAdyenNotificationCronjob(
@@ -1877,7 +1911,10 @@ class Cron
         );
 
         // get total amount of the order
-        $grandTotal = (int)$this->_adyenHelper->formatAmount($this->_order->getGrandTotal(), $orderCurrencyCode);
+        $grandTotal = (int)$this->_adyenHelper->formatAmount(
+            $this->orderAmount,
+            $this->orderCurrency
+        );
 
         // check if total amount of the order is authorised
         $res = $this->_adyenOrderPaymentCollectionFactory
@@ -1886,16 +1923,16 @@ class Cron
 
         if ($res && isset($res[0]) && is_array($res[0])) {
             $amount = $res[0]['total_amount'];
-            $orderAmount = $this->_adyenHelper->formatAmount($amount, $orderCurrencyCode);
+            $formattedOrderAmount = $this->_adyenHelper->formatAmount($amount, $orderCurrencyCode);
             $this->_adyenLogger->addAdyenNotificationCronjob(
                 sprintf(
                     'The grandtotal amount is %s and the total order amount that is authorised is: %s',
                     $grandTotal,
-                    $orderAmount
+                    $formattedOrderAmount
                 )
             );
 
-            if ($grandTotal == $orderAmount) {
+            if ($grandTotal == $formattedOrderAmount) {
                 $this->_adyenLogger->addAdyenNotificationCronjob('AUTHORISATION has the full amount');
                 return true;
             } else {
@@ -1986,7 +2023,12 @@ class Cron
         } else {
             $this->_adyenLogger->addAdyenNotificationCronjob
             (
-                'It is not possible to create invoice for this order'
+                'It is not possible to create invoice for this order',
+                [
+                    'orderId' => $this->_order->getId(),
+                    'orderState' => $this->_order->getState(),
+                    'orderStatus' => $this->_order->getStatus()
+                ]
             );
         }
     }
@@ -2001,14 +2043,13 @@ class Cron
         $this->_adyenLogger->addAdyenNotificationCronjob('Set order to authorised');
 
         // if full amount is captured create invoice
-        $currency = $this->_order->getOrderCurrencyCode();
         $amount = $this->_value;
-        $orderAmount = (int)$this->_adyenHelper->formatAmount($this->_order->getGrandTotal(), $currency);
+        $formattedOrderAmount = (int)$this->_adyenHelper->formatAmount($this->orderAmount, $this->orderCurrency);
 
         // create invoice for the capture notification if you are on manual capture
-        if ($createInvoice == true && $amount == $orderAmount) {
+        if ($createInvoice && $amount == $formattedOrderAmount) {
             $this->_adyenLogger->addAdyenNotificationCronjob(
-                'amount notification:' . $amount . ' amount order:' . $orderAmount
+                'amount notification:' . $amount . ' amount order:' . $formattedOrderAmount
             );
             $this->_createInvoice();
         }

@@ -23,7 +23,7 @@
 
 namespace Adyen\Payment\Gateway\Command;
 
-use Magento\Payment\Gateway\Command;
+use Adyen\Payment\Helper\ChargedCurrency;
 use Magento\Payment\Gateway\CommandInterface;
 
 class PayByMailCommand implements CommandInterface
@@ -39,18 +39,25 @@ class PayByMailCommand implements CommandInterface
     protected $_adyenLogger;
 
     /**
+     * @var ChargedCurrency
+     */
+    protected $chargedCurrency;
+
+    /**
      * PayByMailCommand constructor.
      *
      * @param \Adyen\Payment\Helper\Data $adyenHelper
-     * @param \Magento\Framework\Locale\ResolverInterface $resolver
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+     * @param ChargedCurrency $chargedCurrency
      */
     public function __construct(
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+        \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
+        ChargedCurrency $chargedCurrency
     ) {
         $this->_adyenHelper = $adyenHelper;
         $this->_adyenLogger = $adyenLogger;
+        $this->chargedCurrency = $chargedCurrency;
     }
 
     /**
@@ -127,45 +134,39 @@ class PayByMailCommand implements CommandInterface
         $order = $payment->getOrder();
 
         $realOrderId = $order->getRealOrderId();
-        $orderCurrencyCode = $order->getOrderCurrencyCode();
         $storeId = $order->getStore()->getId();
 
-        // check if paybymail has it's own skin
-        $skinCode = trim($this->_adyenHelper->getAdyenPayByMailConfigData('skin_code'));
-        if ($skinCode == "") {
-            // use HPP skin and HMAC
-            $skinCode = $this->_adyenHelper->getAdyenHppConfigData('skin_code');
-            $hmacKey = $this->_adyenHelper->getHmac();
-            $shopperLocale = trim($this->_adyenHelper->getAdyenHppConfigData('shopper_locale', $storeId));
-            $countryCode = trim($this->_adyenHelper->getAdyenHppConfigData('country_code', $storeId));
-        } else {
-            // use pay_by_mail skin and hmac
-            $hmacKey = $this->_adyenHelper->getHmacPayByMail();
-        }
+        $skinCode = trim($this->_adyenHelper->getAdyenPayByMailConfigData('skin_code', $storeId));
+        $hmacKey = $this->_adyenHelper->getHmacPayByMail($storeId);
 
+        $adyenAmount = $this->chargedCurrency->getOrderAmountCurrency($order);
+        $orderCurrencyCode = $adyenAmount->getCurrencyCode();
+
+        //Use the $paymentAmount arg as total if this is a partial payment, full amount if not
         $amount = $this->_adyenHelper->formatAmount(
-            $paymentAmount ?: $order->getGrandTotal(),
+            $paymentAmount ?: $adyenAmount->getAmount(),
             $orderCurrencyCode
         );
+
         $merchantAccount = trim($this->_adyenHelper->getAdyenAbstractConfigData('merchant_account', $storeId));
         $shopperEmail = $order->getCustomerEmail();
         $customerId = $order->getCustomerId();
 
         // get locale from store
-        $shopperLocale = (!empty($shopperLocale)) ? $shopperLocale : $this->_adyenHelper->getStoreLocale($storeId);
-        $countryCode = (!empty($countryCode)) ? $countryCode : false;
+        $shopperLocale = $this->_adyenHelper->getStoreLocale($storeId);
 
         // if directory lookup is enabled use the billingadress as countrycode
-        if ($countryCode == false) {
-            if (is_object($order->getBillingAddress()) && $order->getBillingAddress()->getCountryId() != "") {
-                $countryCode = $order->getBillingAddress()->getCountryId();
-            } else {
-                $countryCode = "";
-            }
+        if (is_object($order->getBillingAddress()) && $order->getBillingAddress()->getCountryId() != "") {
+            $countryCode = $order->getBillingAddress()->getCountryId();
+        } else {
+            $countryCode = "";
         }
 
-        $deliveryDays = $this->_adyenHelper->getAdyenHppConfigData('delivery_days', $storeId);
-        $deliveryDays = (!empty($deliveryDays)) ? $deliveryDays : 5;
+        $deliveryDays = $this->_adyenHelper->getAdyenPayByMailConfigData('ship_before', $storeId);
+
+        if ($deliveryDays == "") {
+            $deliveryDays = 3;
+        }
 
         $formFields = [];
         $formFields['merchantAccount'] = $merchantAccount;

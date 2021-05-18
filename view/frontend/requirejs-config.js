@@ -7,15 +7,9 @@
 var config = {
     config: {
         mixins: {
-            'Adyen_Payment/js/action/place-order': {
-                'Magento_CheckoutAgreements/js/model/place-order-mixin': true
+            'Magento_Tax/js/view/checkout/summary/grand-total': {
+                'Adyen_Payment/js/view/checkout/summary/grand-total-mixin': true
             }
-        }
-    },
-    map: {
-        '*': {
-            'adyenCheckout':  'https://checkoutshopper-live.adyen.com/checkoutshopper/sdk/3.4.0/adyen.js',
-            'adyenCheckout3101': 'https://checkoutshopper-live.adyen.com/checkoutshopper/sdk/3.10.1/adyen.js'
         }
     }
 };

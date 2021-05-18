@@ -1,5 +1,3 @@
-<?xml version="1.0"?>
-<!--
 /**
  *                       ######
  *                       ######
@@ -21,12 +19,26 @@
  *
  * Author: Adyen <magento@adyen.com>
  */
--->
-<layout xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/layout_generic.xsd">
-    <container name="root" label="Root">
-        <block class="Adyen\Payment\Block\Transparent\Redirect" name="adyen_transparent_redirect"
-               template="transparent/redirect.phtml" cacheable="false">
-        </block>
-    </container>
-</layout>
+define(
+    [],
+    function () {
+        'use strict';
+        return {
+            getClientKey: function () {
+                return window.checkoutConfig.payment.adyen.clientKey;
+            },
+            showLogo: function () {
+                return window.checkoutConfig.payment.adyen.showLogo;
+            },
+            getLocale: function () {
+                return window.checkoutConfig.payment.adyen.locale;
+            },
+            getCheckoutEnvironment: function () {
+                return window.checkoutConfig.payment.adyen.checkoutEnvironment;
+            },
+            getChargedCurrency: function () {
+                return window.checkoutConfig.payment.adyen.chargedCurrency;
+            },
+        };
+    }
+);
